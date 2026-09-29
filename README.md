@@ -1,10 +1,12 @@
 # 🔐 sec-term (`secx`)
 
 > **High-Fidelity Terminal Secrets Manager for AWS SSM Parameter Store & Zero-Cloud Local Encrypted Vaults.**
-> Instant `.env` export, cross-environment drift diffing, zero-disk in-memory secret execution, and AES-256-GCM local vault management.
+> Instant `.env` export, cross-environment drift diffing, zero-disk in-memory secret injection, and AES-256-GCM local vault management.
 
+[![CI](https://github.com/authoritydmc/sec-term/actions/workflows/ci.yml/badge.svg)](https://github.com/authoritydmc/sec-term/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/sec-term.svg?style=flat-square&color=cb3837)](https://www.npmjs.com/package/sec-term)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-green.svg)](https://nodejs.org)
 
 ---
 
@@ -33,87 +35,116 @@ npm install -g sec-term
 
 ---
 
-## 🚀 Usage Guide
+## 🛠️ Real-World Use Cases & Expected Outputs
 
-### 1. Zero-Cloud / Offline Mode (No AWS Required)
+### Use Case 1: Pre-Deploy Environment Configuration Diffing (Zero-Cloud)
+**Problem**: A production deployment crashes because a new variable (`STRIPE_WEBHOOK_SECRET`) was added to `.env.staging` but forgotten in `.env.production`.  
+**Solution**: Run `secx diff` before deploying to catch configuration drift.
 
-#### 🔍 Compare Drift Between Two Local `.env` Files
-Spot missing keys or differences between staging and production configs before deploying:
 ```bash
 secx diff .env.staging .env.production
 ```
 
-#### 🔒 Encrypt a `.env` File into an Encrypted Vault
-```bash
-secx vault encrypt .env.production -o secrets.vault --passphrase "my-secure-passphrase"
-```
+**Expected Output**:
+```text
+🔍 Secret Drift Analysis
+  Target A: .env.staging
+  Target B: .env.production
 
-#### 🔓 Decrypt a Vault File
-```bash
-# Print to terminal
-secx vault decrypt secrets.vault --passphrase "my-secure-passphrase"
+┌──────────────────────┬────────────────────────┬────────────────────────┬──────────┐
+│ Key / Variable       │ .env.staging           │ .env.production        │ Status   │
+├──────────────────────┼────────────────────────┼────────────────────────┼──────────┤
+│ DATABASE_URL         │ po***db                │ po***db                │ ✔ MATCH  │
+│ PORT                 │ 3000                   │ 3000                   │ ✔ MATCH  │
+│ STRIPE_WEBHOOK_SECRET│ wh***99                │ [MISSING]              │ ✖ NO IN B│
+└──────────────────────┴────────────────────────┴────────────────────────┴──────────┘
 
-# Or write back to .env
-secx vault decrypt secrets.vault -o .env.production --passphrase "my-secure-passphrase"
-```
-
-#### 🚀 Execute with Zero-Disk Injected Secrets (Local Vault)
-Run your application with secrets loaded in-memory directly from the encrypted vault:
-```bash
-secx exec secrets.vault --passphrase "my-secure-passphrase" -- npm start
+⚠ Detected 1 configuration drift(s) between targets.
 ```
 
 ---
 
-### 2. AWS Mode (SSM Parameter Store & LocalStack)
+### Use Case 2: Zero-Disk In-Memory Secret Execution
+**Problem**: Writing unencrypted `.env` files to production servers risks secrets being leaked in git commits, logs, or disk forensics.  
+**Solution**: Inject secrets directly from an encrypted `.vault` or AWS SSM hierarchy into memory:
 
-#### 📤 Export AWS Hierarchy to `.env`, JSON, or YAML
+```bash
+# Run server with in-memory secrets (zero plaintext written to disk)
+secx exec secrets.vault --passphrase "my-vault-passphrase" -- npm start
+```
+
+**Expected Output**:
+```text
+> my-app@1.0.0 start
+> node server.js
+[Server] Connected to Database with injected in-memory credentials (PID 14920).
+[Server] Listening on http://localhost:3000
+```
+
+---
+
+### Use Case 3: Encrypting `.env` Files into Local Git-Safe Vaults
+**Problem**: Developers need a secure way to share production `.env` configurations via Git without exposing plaintext.  
+**Solution**: Encrypt `.env.production` into an AES-256-GCM authenticated vault file (`.secx.vault`):
+
+```bash
+secx vault encrypt .env.production -o secrets.vault --passphrase "strong-team-passphrase"
+```
+
+**Expected Output**:
+```text
+✔ Encrypted '.env.production' into 'secrets.vault' (AES-256-GCM)
+```
+
+To decrypt on another machine or CI runner:
+```bash
+secx vault decrypt secrets.vault -o .env.production --passphrase "strong-team-passphrase"
+```
+
+---
+
+### Use Case 4: Pull AWS SSM Hierarchy to `.env` or JSON
+**Problem**: Syncing remote AWS SSM Parameter Store hierarchies to local development.  
+**Solution**:
+
 ```bash
 # Export /prod/api/ hierarchy to .env format
 secx export /prod/api/
 
-# Export to a file directly
+# Export directly to file
 secx export /prod/api/ -f env -w .env.production
 
-# Export to JSON or YAML
+# Export to JSON
 secx export /prod/api/ -f json
-secx export /prod/api/ -f yaml
-
-# LocalStack support (offline mock)
-secx export /dev/api/ --endpoint http://localhost:4566
 ```
 
-#### 🔍 Cross-Environment Drift Diffing
+**Expected Output**:
 ```bash
-# Compare staging vs prod parameters on AWS
-secx diff /staging/api/ /prod/api/
-
-# Reveal raw values
-secx diff /staging/api/ /prod/api/ --show-values
-```
-
-#### 🚀 Run App with Zero Plaintext on Disk
-```bash
-secx exec /prod/api/ -- npm start
-secx exec /prod/api/ -- python main.py
-```
-
-#### 📥 Import `.env` into AWS Parameter Store
-```bash
-# Preview what would be uploaded
-secx import /prod/api/ .env.production --dry-run
-
-# Upload as KMS SecureString
-secx import /prod/api/ .env.production --secure
-```
-
-#### 🌲 Visual Hierarchy Tree
-```bash
-secx tree /prod/
+DATABASE_URL="postgres://admin:secret@db.rds.amazonaws.com:5432/app"
+REDIS_URL="rediss://default:token@redis.prod.cache.amazonaws.com:6379"
+NODE_ENV=production
 ```
 
 ---
 
-## 🛡️ License
+## ⚙️ CLI Options Reference
 
-MIT © [authoritydmc](https://github.com/authoritydmc)
+```text
+Usage: sec-term [options] [command]
+
+Commands:
+  export [options] <target>           Export secrets from AWS SSM or local files (.env / .vault)
+  diff [options] <targetA> <targetB>  Compare two secret targets and highlight drift
+  exec [options] <target> <cmd...>    Execute a command with secrets injected into memory
+  vault encrypt [options] <envFile>   Encrypt a plaintext .env file (AES-256-GCM)
+  vault decrypt [options] <vaultFile> Decrypt a .vault file back to plaintext
+  import [options] <path> <file>      Upload local .env into AWS SSM Parameter Store
+  get [options] <path>                Retrieve value of a single AWS SSM parameter
+  set [options] <path> <value>        Create or update an AWS SSM parameter
+```
+
+---
+
+## 📄 License
+
+MIT © 2026 authoritydmc
