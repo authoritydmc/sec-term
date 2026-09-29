@@ -1,7 +1,7 @@
 {
   "name": "sec-term",
-  "version": "1.0.0",
-  "description": "High-fidelity terminal manager for AWS Systems Manager (SSM) Parameter Store & Secrets Manager supporting instant .env export, cross-environment drift diffing, and zero-disk in-memory secret injection.",
+  "version": "1.1.0",
+  "description": "High-fidelity terminal secrets manager for AWS SSM Parameter Store & local zero-cloud encrypted vaults supporting instant .env export, multi-target drift diffing, and zero-disk in-memory secret injection.",
   "keywords": [
     "aws",
     "ssm",

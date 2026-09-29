@@ -1,164 +1,119 @@
-# sec-term 🔒
+# 🔐 sec-term (`secx`)
 
-[![CI](https://github.com/authoritydmc/sec-term/actions/workflows/ci.yml/badge.svg)](https://github.com/authoritydmc/sec-term/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/sec-term.svg?style=flat&color=brightgreen)](https://www.npmjs.com/package/sec-term)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-green.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+> **High-Fidelity Terminal Secrets Manager for AWS SSM Parameter Store & Zero-Cloud Local Encrypted Vaults.**
+> Instant `.env` export, cross-environment drift diffing, zero-disk in-memory secret execution, and AES-256-GCM local vault management.
 
-> **High-fidelity terminal manager for AWS Systems Manager (SSM) Parameter Store & Secrets Manager** supporting instant `.env` exports, cross-environment drift diffing, and zero-disk in-memory secret injection.
-
-Eliminate the friction of clicking through AWS Console or writing custom scripts to sync environment variables. `sec-term` provides 1-command exports, visual drift diffs, in-memory process execution, and bulk uploads with KMS encryption.
+[![npm version](https://img.shields.io/npm/v/sec-term.svg?style=flat-square&color=cb3837)](https://www.npmjs.com/package/sec-term)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 ---
 
-## ✨ Core Features & Real-World Use Cases
+## ⚡ Highlights
 
-### 1. 📥 Instant `.env` File Generation (`secx export`)
-* **Problem**: Setting up a local development environment requires getting 25+ parameters from AWS into a `.env` file.
-* **Solution**: Recursively pulls all parameters under `/app/dev/`, strips the path prefix, and exports a `.env` file with secure permissions (`0600`).
-```bash
-secx export /myapp/development/ --write .env
-secx export /myapp/production/ --format json > config.json
-```
+- 🌐 **AWS SSM Parameter Store & LocalStack**: Recursively query and export parameters with automatic KMS decryption.
+- 💻 **Zero-Cloud & Offline Ready**: Works completely without AWS! Diff local `.env` files (`.env.local` vs `.env.prod`) and run applications with local files safely.
+- 🔒 **Zero-Cloud Encrypted Vaults (`.secx.vault`)**: Encrypt production `.env` files with AES-256-GCM authenticated encryption (PBKDF2 100k iterations).
+- 🔍 **Visual Drift Diffing**: High-fidelity Unicode tables comparing variables between staging/production or local `.env` files.
+- 🚀 **Zero-Disk In-Memory Execution**: Pull secrets from SSM or encrypted vaults directly into memory child processes without writing plaintext credentials to disk.
 
 ---
 
-### 2. 🔍 Cross-Environment Secret Drift Detector (`secx diff`)
-* **Problem**: Production deployment crashes because an engineer added `NEW_API_KEY` to `/staging/` but forgot to add it to `/production/`.
-* **Solution**: Visual side-by-side terminal comparison highlighting missing keys, extra keys, and mismatches with values masked by default.
+## 📦 Installation
+
+Install globally or run instantly via `npx`:
+
 ```bash
-secx diff /myapp/staging/ /myapp/production/
-```
-```text
-┌─────────────────┬────────────────────────┬────────────────────────┬──────────┐
-│ Key / Variable  │ /myapp/staging/        │ /myapp/production/     │ Status   │
-├─────────────────┼────────────────────────┼────────────────────────┼──────────┤
-│ DATABASE_URL    │ po***5432/staging_db   │ po***5432/prod_db      │ ≠ DIFF   │
-│ STRIPE_KEY      │ sk***test_12345        │ sk***live_98765        │ ≠ DIFF   │
-│ NEW_AI_FEATURE  │ enabled                │ [MISSING]              │ ✖ NO IN B│
-│ REDIS_PORT      │ 6379                   │ 6379                   │ ✔ MATCH  │
-└─────────────────┴────────────────────────┴────────────────────────┴──────────┘
-```
-
----
-
-### 3. 🚀 Zero-Disk In-Memory Secret Injection (`secx exec`)
-* **Problem**: Committing `.env` files with real database credentials to Git or leaving plaintext production keys on developer laptops is a major security risk.
-* **Solution**: Injects AWS parameters straight into process memory and executes your application or migrations without ever saving secrets to disk.
-```bash
-# Injects /myapp/dev/ secrets and starts local dev server
-secx exec /myapp/dev/ -- npm run dev
-
-# Run Prisma/TypeORM migrations with production secrets in memory
-secx exec /myapp/production/ -- npx prisma migrate deploy
-```
-
----
-
-### 4. 📤 Bulk `.env` Importer (`secx import`)
-* **Problem**: Creating 20 encrypted AWS SSM parameters manually via AWS CLI or Console takes 20 minutes.
-* **Solution**: Batch-imports an entire `.env` file into encrypted `SecureString` SSM parameters with 1 command.
-```bash
-# Preview what would be created without writing to AWS
-secx import /myapp/staging/ .env.staging --dry-run
-
-# Upload all keys as KMS encrypted SecureString parameters
-secx import /myapp/staging/ .env.staging --secure
-```
-
----
-
-### 5. 🌲 Interactive Parameter Store Tree (`secx tree`)
-* **Problem**: Finding parameters across multiple AWS microservices is painful.
-* **Solution**: Colorized hierarchy view with KMS encryption status, versions, and paths.
-```bash
-secx tree /myapp/
-```
-
----
-
-## 🚀 Installation
-
-### Global CLI Tool
-```bash
-npm install -g sec-term
-# or run directly with npx
+# Run instantly with zero install
 npx sec-term --help
-# or short alias
 npx secx --help
+
+# Or install globally
+npm install -g sec-term
 ```
 
-### In Your Project (Library)
+---
+
+## 🚀 Usage Guide
+
+### 1. Zero-Cloud / Offline Mode (No AWS Required)
+
+#### 🔍 Compare Drift Between Two Local `.env` Files
+Spot missing keys or differences between staging and production configs before deploying:
 ```bash
-npm install sec-term
+secx diff .env.staging .env.production
 ```
 
----
-
-## 📖 Programmatic API (TypeScript & JavaScript)
-
-```typescript
-import { fetchParametersByPath, diffSecretPaths, exportSecrets } from "sec-term";
-
-// 1. Fetch Decrypted Key-Value Map
-const items = await fetchParametersByPath("/myapp/production/");
-for (const item of items) {
-  console.log(`${item.key} (${item.type})`);
-}
-
-// 2. Export Formatted .env
-const dotenvString = await exportSecrets("/myapp/staging/", { format: "env" });
-console.log(dotenvString);
-
-// 3. Diff Two Paths Programmatically
-const { rows } = await diffSecretPaths("/myapp/staging/", "/myapp/production/");
-const missingInProd = rows.filter((r) => r.status === "MISSING_IN_B");
-console.log("Missing in Prod:", missingInProd.map((r) => r.key));
-```
-
----
-
-## ⚙️ CLI Commands & Options
-
-| Command | Arguments | Options | Description |
-| :--- | :--- | :--- | :--- |
-| `export` | `<path>` | `-f, --format <env\|json\|yaml>`, `-w, --write <file>` | Export hierarchy to format |
-| `diff` | `<pathA> <pathB>` | `--show-values` | Compare two secret paths |
-| `exec` | `<path> -- <cmd>` | `--region <region>` | Run command with in-memory secrets |
-| `import` | `<path> <file>` | `--secure`, `--kms-key-id <key>`, `--dry-run` | Bulk upload `.env` to SSM |
-| `get` | `<path>` | `--region <region>` | Retrieve single parameter value |
-| `set` | `<path> <value>` | `--secure`, `--type <type>`, `--kms-key-id <key>` | Set single parameter |
-| `tree` | `[path]` | `--region <region>` | Visual hierarchy of paths |
-
----
-
-## 🧪 Development & Testing
-
+#### 🔒 Encrypt a `.env` File into an Encrypted Vault
 ```bash
-git clone https://github.com/authoritydmc/sec-term.git
-cd sec-term
-npm install
-npm test
-npm run build
+secx vault encrypt .env.production -o secrets.vault --passphrase "my-secure-passphrase"
 ```
 
----
-
-## 🚀 Automated Release & Versioning
-
-### 1-Click from GitHub Actions
-Go to **Actions** -> **Automated Version & Release** -> Select `patch`, `minor`, or `major` -> Click **Run workflow**.
-
-### From Terminal
+#### 🔓 Decrypt a Vault File
 ```bash
-npm run release:patch
-npm run release:minor
-npm run release:major
+# Print to terminal
+secx vault decrypt secrets.vault --passphrase "my-secure-passphrase"
+
+# Or write back to .env
+secx vault decrypt secrets.vault -o .env.production --passphrase "my-secure-passphrase"
+```
+
+#### 🚀 Execute with Zero-Disk Injected Secrets (Local Vault)
+Run your application with secrets loaded in-memory directly from the encrypted vault:
+```bash
+secx exec secrets.vault --passphrase "my-secure-passphrase" -- npm start
 ```
 
 ---
 
-## 📄 License
+### 2. AWS Mode (SSM Parameter Store & LocalStack)
 
-[MIT](LICENSE) © 2026 authoritydmc
+#### 📤 Export AWS Hierarchy to `.env`, JSON, or YAML
+```bash
+# Export /prod/api/ hierarchy to .env format
+secx export /prod/api/
+
+# Export to a file directly
+secx export /prod/api/ -f env -w .env.production
+
+# Export to JSON or YAML
+secx export /prod/api/ -f json
+secx export /prod/api/ -f yaml
+
+# LocalStack support (offline mock)
+secx export /dev/api/ --endpoint http://localhost:4566
+```
+
+#### 🔍 Cross-Environment Drift Diffing
+```bash
+# Compare staging vs prod parameters on AWS
+secx diff /staging/api/ /prod/api/
+
+# Reveal raw values
+secx diff /staging/api/ /prod/api/ --show-values
+```
+
+#### 🚀 Run App with Zero Plaintext on Disk
+```bash
+secx exec /prod/api/ -- npm start
+secx exec /prod/api/ -- python main.py
+```
+
+#### 📥 Import `.env` into AWS Parameter Store
+```bash
+# Preview what would be uploaded
+secx import /prod/api/ .env.production --dry-run
+
+# Upload as KMS SecureString
+secx import /prod/api/ .env.production --secure
+```
+
+#### 🌲 Visual Hierarchy Tree
+```bash
+secx tree /prod/
+```
+
+---
+
+## 🛡️ License
+
+MIT © [authoritydmc](https://github.com/authoritydmc)

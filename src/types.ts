@@ -1,8 +1,8 @@
-export type ParameterType = "String" | "StringList" | "SecureString" | "SecretsManager";
+export type ParameterType = "String" | "StringList" | "SecureString" | "SecretsManager" | "File" | "Vault";
 
 export interface SecretItem {
   key: string; // Clean key (e.g. DATABASE_URL)
-  fullPath: string; // Full AWS path (e.g. /app/prod/DATABASE_URL)
+  fullPath: string; // Full path or file location (e.g. /app/prod/DATABASE_URL or .env.staging)
   value: string;
   type: ParameterType;
   version?: number;
@@ -25,6 +25,8 @@ export interface SecretDiffRow {
 export interface ClientOptions {
   region?: string;
   profile?: string;
+  endpoint?: string; // Custom endpoint for LocalStack / MinIO / local AWS mocks
+  passphrase?: string; // For encrypted local vaults (.secx.vault)
 }
 
 export interface ExportOptions extends ClientOptions {
@@ -35,6 +37,8 @@ export interface ExportOptions extends ClientOptions {
 
 export interface DiffOptions extends ClientOptions {
   showValues?: boolean;
+  passphraseA?: string;
+  passphraseB?: string;
 }
 
 export interface ImportOptions extends ClientOptions {

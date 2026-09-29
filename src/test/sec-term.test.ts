@@ -1,11 +1,20 @@
 import test from "node:test";
 import assert from "node:assert";
+import fs from "fs";
+import path from "path";
+import os from "os";
 import {
   parseDotenv,
   formatDotenv,
   computeSecretDiff,
   formatSecretItems,
   maskValue,
+  encryptVault,
+  decryptVault,
+  encryptEnvFile,
+  decryptVaultFile,
+  loadSecrets,
+  diffSecretPaths,
   SecretItem,
 } from "../index.js";
 
@@ -79,4 +88,52 @@ test("maskValue masks secret characters", () => {
   assert.strictEqual(maskValue(undefined), "[MISSING]");
   assert.strictEqual(maskValue("pass"), "****");
   assert.strictEqual(maskValue("supersecretpassword"), "su***rd");
+});
+
+test("AES-256-GCM Vault encrypts and decrypts accurately with authentication tag", () => {
+  const secretContent = "DATABASE_URL=postgres://master:supersecret@db:5432/app\nAPI_KEY=live_xyz987";
+  const passphrase = "correct-horse-battery-staple-2026";
+
+  const payload = encryptVault(secretContent, passphrase);
+  assert.strictEqual(payload.version, 1);
+  assert.strictEqual(payload.algorithm, "aes-256-gcm");
+
+  // Decrypt with correct passphrase
+  const decrypted = decryptVault(payload, passphrase);
+  assert.strictEqual(decrypted, secretContent);
+
+  // Decrypt with invalid passphrase fails
+  assert.throws(() => {
+    decryptVault(payload, "wrong-passphrase");
+  }, /Failed to decrypt vault/);
+});
+
+test("Local .env file diffing and vault loading without AWS", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "secx-test-"));
+  const envStaging = path.join(tmpDir, ".env.staging");
+  const envProd = path.join(tmpDir, ".env.prod");
+  const vaultPath = path.join(tmpDir, "secrets.vault");
+
+  fs.writeFileSync(envStaging, "PORT=3000\nAPI_URL=https://staging.api.com\nDEBUG=true\n");
+  fs.writeFileSync(envProd, "PORT=3000\nAPI_URL=https://api.com\nPROD_ONLY=true\n");
+
+  // 1. Test Diffing two local .env files
+  const { rows, formattedTable } = await diffSecretPaths(envStaging, envProd);
+  assert.ok(formattedTable.includes("API_URL"));
+  const debugRow = rows.find(r => r.key === "DEBUG");
+  assert.strictEqual(debugRow?.status, "MISSING_IN_B");
+  const portRow = rows.find(r => r.key === "PORT");
+  assert.strictEqual(portRow?.status, "MATCH");
+
+  // 2. Test Encrypting .env to Vault file and loading secrets directly
+  const passphrase = "test-vault-pass";
+  encryptEnvFile(envProd, vaultPath, passphrase);
+  assert.ok(fs.existsSync(vaultPath));
+
+  const loadedFromVault = await loadSecrets(vaultPath, { passphrase });
+  assert.strictEqual(loadedFromVault.length, 3);
+  assert.strictEqual(loadedFromVault.find(i => i.key === "API_URL")?.value, "https://api.com");
+
+  // Cleanup
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 });

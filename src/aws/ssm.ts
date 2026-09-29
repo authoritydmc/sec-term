@@ -10,6 +10,7 @@ import { SecretItem, ClientOptions, ParameterType } from "../types.js";
 export function getSSMClient(options: ClientOptions = {}): SSMClient {
   return new SSMClient({
     region: options.region || process.env.AWS_REGION || "us-east-1",
+    endpoint: options.endpoint || process.env.AWS_ENDPOINT_URL || process.env.LOCALSTACK_ENDPOINT,
   });
 }
 
@@ -106,7 +107,7 @@ export async function putParameter(
   const command = new PutParameterCommand({
     Name: name,
     Value: value,
-    Type: type === "SecretsManager" ? "SecureString" : type,
+    Type: (type === "SecretsManager" || type === "File" || type === "Vault") ? "SecureString" : type,
     Overwrite: options.overwrite !== false,
     KeyId: options.kmsKeyId,
   });

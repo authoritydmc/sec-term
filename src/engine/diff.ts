@@ -1,5 +1,5 @@
 import { SecretDiffRow, DiffOptions, SecretItem } from "../types.js";
-import { fetchParametersByPath } from "../aws/ssm.js";
+import { loadSecrets } from "./loader.js";
 import { drawDiffTable } from "../utils/color.js";
 
 /**
@@ -57,20 +57,20 @@ export function computeSecretDiff(
 }
 
 /**
- * Fetch and diff two secret paths from AWS SSM Parameter Store.
+ * Fetch and diff two secret targets (AWS paths, local .env files, or encrypted .vault files).
  */
 export async function diffSecretPaths(
-  pathA: string,
-  pathB: string,
+  targetA: string,
+  targetB: string,
   options: DiffOptions = {}
 ): Promise<{ rows: SecretDiffRow[]; formattedTable: string }> {
   const [itemsA, itemsB] = await Promise.all([
-    fetchParametersByPath(pathA, options),
-    fetchParametersByPath(pathB, options),
+    loadSecrets(targetA, { ...options, passphrase: options.passphraseA || options.passphrase }),
+    loadSecrets(targetB, { ...options, passphrase: options.passphraseB || options.passphrase }),
   ]);
 
   const rows = computeSecretDiff(itemsA, itemsB);
-  const formattedTable = drawDiffTable(pathA, pathB, rows, options.showValues);
+  const formattedTable = drawDiffTable(targetA, targetB, rows, options.showValues);
 
   return { rows, formattedTable };
 }
